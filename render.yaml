@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: trade-doc-validator-fe
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Render exposes port 80 from the container on HTTPS automatically
+    # No env vars needed — backend URL is hardcoded in nginx.conf proxy
+    healthCheckPath: /
+    autoDeploy: true
+

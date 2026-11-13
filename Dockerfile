@@ -3,13 +3,15 @@ FROM node:18-alpine AS build
 
 WORKDIR /app
 
-# Copy dependency configs
-COPY package.json package-lock.json* ./
+# Copy only package.json — drop the lock file so npm resolves
+# the correct Linux native binaries (e.g. @tailwindcss/oxide)
+# instead of using the Windows-generated lock file.
+COPY package.json ./
 
-# Install packages
+# Install packages fresh (no lock file = correct platform binaries)
 RUN npm install
 
-# Copy project files
+# Copy project files (lock file excluded via .dockerignore)
 COPY . .
 
 # Build the production bundle

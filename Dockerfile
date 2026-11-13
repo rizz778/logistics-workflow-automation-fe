@@ -1,5 +1,7 @@
 # --- Build Stage ---
-FROM node:18-alpine AS build
+# Use Debian-based Node (glibc) so @tailwindcss/oxide native bindings resolve.
+# node:18-alpine uses musl libc which breaks the oxide prebuilt binary.
+FROM node:20-slim AS build
 
 WORKDIR /app
 

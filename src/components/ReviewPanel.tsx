@@ -98,10 +98,19 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
                 const docFields = fields[docName] || {};
                 Object.entries(docData).forEach(([key, valInfo]) => {
                     if (key !== 'extraction_warnings') {
+                        const originalVal = (valInfo as any)?.value;
+                        const currentInputVal = docFields[key];
+                        // If operator edited the field value or touched it, force confidence to 1.0 (100%)
+                        const isEdited = currentInputVal !== undefined && (
+                            String(currentInputVal).trim() !== String(originalVal ?? '').trim() ||
+                            (valInfo as any)?.source_snippet === 'Human Auditor Override' ||
+                            (valInfo as any)?.confidence === 1.0
+                        );
+
                         docPayload[key] = {
-                            value: docFields[key] !== undefined ? docFields[key] : (valInfo as any)?.value,
-                            confidence: (valInfo as any)?.confidence ?? 1.0,
-                            source_snippet: (valInfo as any)?.source_snippet ?? null
+                            value: currentInputVal !== undefined ? currentInputVal : originalVal,
+                            confidence: isEdited ? 1.0 : ((valInfo as any)?.confidence ?? 1.0),
+                            source_snippet: isEdited ? 'Human Auditor Override' : ((valInfo as any)?.source_snippet ?? null)
                         };
                     }
                 });
@@ -113,10 +122,18 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
             const singleFields = fields['single'] || {};
             Object.entries(originalData).forEach(([key, valInfo]) => {
                 if (key !== 'extraction_warnings') {
+                    const originalVal = (valInfo as any)?.value;
+                    const currentInputVal = singleFields[key];
+                    const isEdited = currentInputVal !== undefined && (
+                        String(currentInputVal).trim() !== String(originalVal ?? '').trim() ||
+                        (valInfo as any)?.source_snippet === 'Human Auditor Override' ||
+                        (valInfo as any)?.confidence === 1.0
+                    );
+
                     payload[key] = {
-                        value: singleFields[key] !== undefined ? singleFields[key] : (valInfo as any)?.value,
-                        confidence: (valInfo as any)?.confidence ?? 1.0,
-                        source_snippet: (valInfo as any)?.source_snippet ?? null
+                        value: currentInputVal !== undefined ? currentInputVal : originalVal,
+                        confidence: isEdited ? 1.0 : ((valInfo as any)?.confidence ?? 1.0),
+                        source_snippet: isEdited ? 'Human Auditor Override' : ((valInfo as any)?.source_snippet ?? null)
                     };
                 }
             });
@@ -366,8 +383,13 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
                             ? (run.validation_results as any)[activeDoc]?.[key]
                             : (run.validation_results as any)[key];
 
-                        const val = activeDocFields[key] || '';
-                        const confidence = originalField?.confidence ?? 1.0;
+                        const val = activeDocFields[key] !== undefined ? activeDocFields[key] : (originalField?.value ?? '');
+                        const isEdited = activeDocFields[key] !== undefined && (
+                            String(activeDocFields[key]).trim() !== String(originalField?.value ?? '').trim() ||
+                            originalField?.source_snippet === 'Human Auditor Override' ||
+                            originalField?.confidence === 1.0
+                        );
+                        const confidence = isEdited ? 1.0 : (originalField?.confidence ?? 1.0);
 
                         return (
                             <div key={key} className="bg-slate-900/20 border border-slate-800/60 rounded-lg p-3 grid grid-cols-[150px_1fr_120px_100px] items-center gap-6">

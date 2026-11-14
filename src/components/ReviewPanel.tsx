@@ -7,9 +7,11 @@ import { resolveProcessedEmail } from '../api/triggerApi';
 interface ReviewPanelProps {
     run: PipelineRun | null;
     onRunUpdated: () => void;
+    /** Called after a successful Save Edits so the parent can subscribe to live SSE logs */
+    onSaveEdits?: (shipmentId: string, runId: number) => void;
 }
 
-export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated }) => {
+export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onSaveEdits }) => {
     const runId = run ? (run.id || (run as any).run_id) : 0;
     const status = run ? (run.status || 'pending_review') : 'pending_review';
 
@@ -136,7 +138,10 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated }) =
                     amendment_draft: emailBody || null
                 });
             }
-            setMessage({ type: 'success', text: 'Revisions saved successfully.' });
+            setMessage({ type: 'success', text: 'Revisions saved. Re-validating compliance...' });
+            // Notify parent to open live SSE log stream for this shipment
+            const shipmentId = (run as any).shipment_id || String(runId);
+            onSaveEdits?.(shipmentId, runId);
             onRunUpdated();
         } catch (err: any) {
             setMessage({ type: 'error', text: err.message || 'Failed to save changes.' });

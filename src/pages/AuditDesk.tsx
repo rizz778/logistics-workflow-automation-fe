@@ -62,6 +62,80 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
         onRunCompleted();
     };
 
+    /** Opens a live SSE log stream after Save Edits so the operator sees re-validation progress */
+    const handleSaveEditsWithSSE = (shipmentId: string, runId: number) => {
+        // Close any existing stream
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+        }
+
+        setStep('validating');
+        setLogs(prev => [
+            ...prev,
+            `── Re-validation started ──`,
+            `SSE: Subscribing to live re-validation stream for shipment ${shipmentId}...`
+        ]);
+
+        const es = createRunEventSource(
+            shipmentId,
+            async (event) => {
+                const stepName = (event.step || '').toLowerCase();
+                const statusName = (event.status || '').toLowerCase();
+
+                // Map step → tracker stage
+                if (stepName === 'validate' || stepName === 'validating') {
+                    setStep('validating');
+                } else if (stepName === 'route' || stepName === 'routing') {
+                    setStep('routing');
+                } else if (
+                    stepName === 'completed' || stepName === 'done' ||
+                    statusName === 'approved' || statusName === 'amended'
+                ) {
+                    setStep('done');
+                    es.close();
+                    try {
+                        const updated = await fetchRunStatus(runId);
+                        setActiveRun(updated);
+                    } catch { /* keep existing activeRun */ }
+                    loadQueues();
+                    onRunCompleted();
+                } else if (
+                    stepName === 'human_approval' ||
+                    statusName === 'pending_review'
+                ) {
+                    // Paused again for another human review
+                    setStep('done');
+                    es.close();
+                    try {
+                        const updated = await fetchRunStatus(runId);
+                        setActiveRun(updated);
+                    } catch { /* keep existing */ }
+                    loadQueues();
+                }
+
+                if (event.message) {
+                    setLogs(prev => [...prev, event.message]);
+                }
+                // Surface review attempt count if present
+                if (event.data && typeof event.data === 'object') {
+                    const d = event.data as any;
+                    if (d.human_review_count !== undefined) {
+                        const remaining = d.reviews_remaining ?? (3 - d.human_review_count);
+                        setLogs(prev => [
+                            ...prev,
+                            `Review attempt ${d.human_review_count}/${d.max_human_reviews ?? 3} complete. ${remaining} attempt(s) remaining before auto-escalation.`
+                        ]);
+                    }
+                }
+            },
+            (err) => {
+                console.debug('SSE re-validation stream closed:', err);
+            }
+        );
+
+        eventSourceRef.current = es;
+    };
+
     const handleUploadStart = async (files: File[]) => {
         setLoading(true);
         setActiveRun(null);
@@ -335,14 +409,18 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                 )}
                 {mode === 'inbox' && activeRun && (
                     <div className="animate-fadeIn">
-                        <PipelineTracker step="done" logs={activeRun.logs || ['Orchestrator: No logs available.']} />
+                        {/* While re-validating after Save Edits, show live logs; otherwise show stored run logs */}
+                        <PipelineTracker
+                            step={step !== 'idle' ? step : 'done'}
+                            logs={step !== 'idle' && logs.length > 0 ? logs : (activeRun.logs || ['Orchestrator: No logs available.'])}
+                        />
                     </div>
                 )}
             </div>
             
             {/* Right details review column */}
             <div className="w-full">
-                <ReviewPanel run={activeRun} onRunUpdated={handleRunUpdated} />
+                <ReviewPanel run={activeRun} onRunUpdated={handleRunUpdated} onSaveEdits={handleSaveEditsWithSSE} />
             </div>
         </div>
     );

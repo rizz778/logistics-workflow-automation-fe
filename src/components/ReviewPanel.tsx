@@ -251,6 +251,14 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
     // Always show draft mail if there are discrepancies or if the decision is not auto-approved
     const showDraftEmail = run.decision !== 'auto_approve' || run.amendment_draft;
 
+    // Only show edit/approve actions when the run is waiting for human intervention.
+    // Hide them once fully approved, auto-approved, amended, or failed.
+    const needsHumanAction = [
+        'pending_review',
+        'pending_correction',
+        'pending_approval',
+    ].includes(run.status || '');
+
     return (
         <div className="bg-[#1E293B]/50 border border-slate-800/80 rounded-xl p-6 shadow-lg backdrop-blur-md text-slate-100 flex flex-col gap-6">
             <div className="flex justify-between items-start border-b border-slate-800 pb-5">
@@ -412,7 +420,8 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
                 </div>
             )}
 
-            {/* Actions panel */}
+            {/* Actions panel — only shown when human review is required */}
+            {needsHumanAction && (
             <div className="flex justify-end gap-3 border-t border-slate-850 pt-5">
                 <button
                     onClick={handleSaveEdits}
@@ -443,6 +452,25 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
                     </button>
                 )}
             </div>
+            )}
+
+            {/* Resolved state — no actions available */}
+            {!needsHumanAction && run.status && (
+                <div className="flex items-center justify-end gap-2 border-t border-slate-850 pt-5">
+                    <CheckCircle size={14} className={
+                        run.status === 'approved' ? 'text-emerald-400' :
+                        run.status === 'amended'  ? 'text-amber-400'  :
+                        'text-slate-500'
+                    } />
+                    <span className="text-xs text-slate-400 font-medium capitalize">
+                        {run.status === 'approved'
+                            ? 'Approved — no further action required.'
+                            : run.status === 'amended'
+                            ? 'Amendment dispatched — run closed.'
+                            : `Run resolved (${run.status.replace(/_/g, ' ')}).`}
+                    </span>
+                </div>
+            )}
         </div>
     );
 };

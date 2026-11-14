@@ -82,6 +82,10 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                 const stepName = (event.step || '').toLowerCase();
                 const statusName = (event.status || '').toLowerCase();
 
+                // Ignore initial snapshot events (status='paused') — those are
+                // page-reload state restores, not live worker events.
+                if (statusName === 'paused' || statusName === 'listening') return;
+
                 // Map step → tracker stage
                 if (stepName === 'validate' || stepName === 'validating') {
                     setStep('validating');
@@ -99,11 +103,8 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                     } catch { /* keep existing activeRun */ }
                     loadQueues();
                     onRunCompleted();
-                } else if (
-                    stepName === 'human_approval' ||
-                    statusName === 'pending_review'
-                ) {
-                    // Paused again for another human review
+                } else if (stepName === 'human_approval' && statusName === 'pending_review') {
+                    // Worker re-validated and still flagged — paused again for next review
                     setStep('done');
                     es.close();
                     try {

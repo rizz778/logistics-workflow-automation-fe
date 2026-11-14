@@ -459,14 +459,14 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated, onS
                 <div className="flex items-center justify-end gap-2 border-t border-slate-850 pt-5">
                     <CheckCircle size={14} className={
                         run.status === 'approved' ? 'text-emerald-400' :
-                        run.status === 'amended'  ? 'text-amber-400'  :
+                        (run.status === 'amended' || run.status === 'amendment_required') ? 'text-amber-400' :
                         'text-slate-500'
                     } />
                     <span className="text-xs text-slate-400 font-medium capitalize">
                         {run.status === 'approved'
                             ? 'Approved — no further action required.'
-                            : run.status === 'amended'
-                            ? 'Amendment dispatched — run closed.'
+                            : (run.status === 'amended' || run.status === 'amendment_required')
+                            ? 'Amendment required — review attempts exhausted. Run marked as processed.'
                             : `Run resolved (${run.status.replace(/_/g, ' ')}).`}
                     </span>
                 </div>

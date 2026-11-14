@@ -93,7 +93,7 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                     setStep('routing');
                 } else if (
                     stepName === 'completed' || stepName === 'done' ||
-                    statusName === 'approved' || statusName === 'amended'
+                    statusName === 'approved' || statusName === 'amended' || statusName === 'amendment_required'
                 ) {
                     setStep('done');
                     es.close();

@@ -3,7 +3,7 @@ import { UploadZone } from '../components/UploadZone';
 import { PipelineTracker } from '../components/PipelineTracker';
 import { ReviewPanel } from '../components/ReviewPanel';
 import type { PipelineRun } from '../types/pipeline';
-import { uploadDocument } from '../api/uploadApi';
+import { uploadDocuments } from '../api/uploadApi';
 import { fetchIncomingEmails, fetchProcessedEmails } from '../api/triggerApi';
 import { createRunEventSource, fetchRunStatus } from '../api/statusApi';
 import { Mail, Upload, Clock, RefreshCw, Inbox } from 'lucide-react';
@@ -62,17 +62,19 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
         onRunCompleted();
     };
 
-    const handleUploadStart = async (file: File) => {
+    const handleUploadStart = async (files: File[]) => {
         setLoading(true);
         setActiveRun(null);
         setStep('uploading');
+        const fileNames = files.map(f => f.name).join(', ');
+        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
         setLogs([
             'Client Node: Requesting S3 presigned PUT URL from API Gateway...',
-            `Client Node: Streaming ${file.name} (${(file.size / 1024).toFixed(1)} KB) directly to S3 storage...`
+            `Client Node: Streaming ${files.length} file(s) [${fileNames}] (${(totalSize / 1024).toFixed(1)} KB) directly to S3 storage...`
         ]);
 
         try {
-            const uploadResult = await uploadDocument(file);
+            const uploadResult = await uploadDocuments(files);
             const runId = uploadResult.id;
             const shipmentId = uploadResult.shipment_id || String(runId);
 
@@ -80,7 +82,7 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
             if (uploadResult.is_cached) {
                 setLogs(prev => [
                     ...prev,
-                    `⚡ Fast-Path Cache HIT: Instant compliance outcome retrieved for ${file.name}.`,
+                    `⚡ Fast-Path Cache HIT: Instant compliance outcome retrieved for ${fileNames}.`,
                     `Bypassed S3 upload and multi-agent queue (0 Gemini tokens consumed).`,
                     `Decision: ${uploadResult.decision.toUpperCase()} - Reason: ${uploadResult.decision_reason}`
                 ]);
@@ -276,7 +278,9 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                             ) : (
                                 displayedRuns.map((run) => {
                                     const isSelected = activeRun?.id === run.id;
-                                    const filenameList = run.filenames || (run.filename ? [run.filename] : []);
+                                    const filenameList = run.filenames && run.filenames.length > 0
+                                        ? run.filenames
+                                        : (run.filename ? run.filename.split(',').map(s => s.trim()).filter(Boolean) : []);
                                     
                                     return (
                                         <div
@@ -294,16 +298,23 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                                                         {run.email_sender || 'unknown@supplier.com'}
                                                     </span>
                                                     <span className="text-xs font-semibold text-white truncate font-outfit">
-                                                        {run.email_subject || 'No Subject'}
+                                                        {run.email_subject || (run as any).email_metadata_json?.subject || 'No Subject'}
                                                     </span>
                                                 </div>
-                                                <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase shrink-0 ${getDecisionBadgeClass(run.decision)}`}>
-                                                    {run.decision.replace(/_/g, ' ')}
-                                                </span>
+                                                {run.status === 'processing' || run.status === 'pending_upload' ? (
+                                                    <span className="px-2 py-0.5 rounded text-[8px] font-bold uppercase shrink-0 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping"></span>
+                                                        <span>Processing</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase shrink-0 ${getDecisionBadgeClass(run.decision)}`}>
+                                                        {(run.decision || 'pending').replace(/_/g, ' ')}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             <p className="text-[10px] text-slate-450 line-clamp-2 leading-relaxed bg-[#000]/10 p-1.5 rounded border border-slate-850">
-                                                {run.email_body || '(No message body)'}
+                                                {run.email_body || (run as any).email_metadata_json?.body || '(No message body)'}
                                             </p>
 
                                             <div className="flex justify-between items-center text-[9px] text-slate-500 pt-1 border-t border-slate-850">

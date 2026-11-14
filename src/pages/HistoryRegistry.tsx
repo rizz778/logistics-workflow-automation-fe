@@ -95,7 +95,7 @@ export const HistoryRegistry: React.FC<HistoryRegistryProps> = ({ runs, loading,
                                     const isEmail = run.source === 'inbox';
                                     const fileList = run.filename ? run.filename.split(', ') : [];
                                     const isMulti = fileList.length > 1;
-                                    const hasDisc = run.cross_doc_results && !run.cross_doc_results.is_consistent;
+                                    const hasDisc = run.cross_doc_results && !run.cross_doc_results.is_consistent && Array.isArray(run.cross_doc_results.discrepancies) && run.cross_doc_results.discrepancies.length > 0;
                                     
                                     return (
                                         <tr key={run.id} className="hover:bg-slate-800/20 transition-all duration-150">
@@ -139,10 +139,10 @@ export const HistoryRegistry: React.FC<HistoryRegistryProps> = ({ runs, loading,
                                                     hasDisc ? (
                                                         <span 
                                                             className="flex items-center gap-1 text-rose-400 font-semibold"
-                                                            title={run.cross_doc_results?.discrepancies.map(d => d.reason).join('\n')}
+                                                            title={run.cross_doc_results?.discrepancies?.map(d => d.reason).join('\n') || ''}
                                                         >
                                                             <AlertTriangle size={12} />
-                                                            <span>Mismatch ({run.cross_doc_results?.discrepancies.length})</span>
+                                                            <span>Mismatch ({run.cross_doc_results?.discrepancies?.length ?? 0})</span>
                                                         </span>
                                                     ) : (
                                                         <span className="flex items-center gap-1 text-emerald-400 font-semibold">
@@ -159,12 +159,12 @@ export const HistoryRegistry: React.FC<HistoryRegistryProps> = ({ runs, loading,
                                             
                                             <td className="p-4">
                                                 <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${getDecisionBadgeClass(run.decision)}`}>
-                                                    {run.decision.replace(/_/g, ' ')}
+                                                    {(run.decision || '').replace(/_/g, ' ')}
                                                 </span>
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${getStatusBadgeClass(run.status)}`}>
-                                                    {run.status.replace(/_/g, ' ')}
+                                                    {(run.status || '').replace(/_/g, ' ')}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-center">

@@ -46,7 +46,7 @@ export interface PipelineRun {
     decision: 'auto_approve' | 'flag_review' | 'amendment_request';
     decision_reason: string;
     amendment_draft: string | null;
-    status: 'pending_review' | 'approved' | 'amended';
+    status: 'pending_review' | 'approved' | 'amended' | 'processing' | 'pending_upload' | 'queued' | 'pending_correction';
     edited_data: TradeDocumentExtraction | Record<string, TradeDocumentExtraction> | null;
     logs?: string[];
     source?: 'inbox' | 'manual_upload';

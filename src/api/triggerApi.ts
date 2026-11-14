@@ -40,11 +40,14 @@ export async function triggerEmailIncoming(
         presignedRes.files.map(async (item: any) => {
             const fileObj = files.find(f => f.name === item.filename);
             if (!fileObj) return;
-            await fetch(item.upload_url, {
+            const res = await fetch(item.upload_url, {
                 method: 'PUT',
                 headers: { 'Content-Type': fileObj.type || 'application/pdf' },
                 body: fileObj
             });
+            if (!res.ok) {
+                throw new Error(`Failed to upload '${fileObj.name}' to storage: HTTP ${res.status}`);
+            }
         })
     );
 

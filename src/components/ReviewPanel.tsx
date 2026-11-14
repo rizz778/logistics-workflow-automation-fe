@@ -284,7 +284,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ run, onRunUpdated }) =
             </div>
 
             {/* Cross document consistency discrepancies (Multi-doc runs only) */}
-            {isMultiDoc && run.cross_doc_results && !run.cross_doc_results.is_consistent && (
+            {isMultiDoc && run.cross_doc_results && !run.cross_doc_results.is_consistent && Array.isArray(run.cross_doc_results.discrepancies) && run.cross_doc_results.discrepancies.length > 0 && (
                 <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 flex flex-col gap-3">
                     <h4 className="font-semibold text-rose-400 flex items-center gap-1.5 text-xs uppercase tracking-wider">
                         <AlertTriangle size={14} />

@@ -2,7 +2,7 @@ import { baseApi } from './baseApi';
 import type { TradeDocumentExtraction, PipelineRun } from '../types/pipeline';
 
 export interface UpdateStatusPayload {
-    status: 'pending_review' | 'approved' | 'amended';
+    status: string;
     edited_data?: Partial<TradeDocumentExtraction> | null;
     amendment_draft?: string | null;
 }

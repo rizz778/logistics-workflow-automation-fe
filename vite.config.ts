@@ -12,14 +12,14 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/pipeline': {
-        target: 'https://trade-doc-gateway-worker.onrender.com',
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
       '/chat': {
-        target: 'https://trade-doc-gateway-worker.onrender.com',
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

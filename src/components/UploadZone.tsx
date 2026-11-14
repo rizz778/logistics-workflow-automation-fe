@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
 
 interface UploadZoneProps {
-    onUploadStart: (file: File) => void;
+    onUploadStart: (files: File[]) => void;
     disabled: boolean;
 }
 
@@ -23,25 +23,33 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onUploadStart, disabled 
         setIsDragOver(false);
         if (disabled) return;
 
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            validateAndUpload(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const droppedFiles = Array.from(e.dataTransfer.files);
+            const validFiles = droppedFiles.filter(f => validateFile(f));
+            if (validFiles.length > 0) {
+                onUploadStart(validFiles);
+            }
         }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            validateAndUpload(e.target.files[0]);
+        if (e.target.files && e.target.files.length > 0) {
+            const selectedFiles = Array.from(e.target.files);
+            const validFiles = selectedFiles.filter(f => validateFile(f));
+            if (validFiles.length > 0) {
+                onUploadStart(validFiles);
+            }
         }
     };
 
-    const validateAndUpload = (file: File) => {
+    const validateFile = (file: File): boolean => {
         const allowed = ['.pdf', '.png', '.jpg', '.jpeg'];
         const hasAllowedExt = allowed.some(ext => file.name.toLowerCase().endsWith(ext));
         if (!hasAllowedExt) {
-            alert('Only PDF and Image files are allowed.');
-            return;
+            alert(`File "${file.name}" is not allowed. Only PDF and Image files are accepted.`);
+            return false;
         }
-        onUploadStart(file);
+        return true;
     };
 
     return (
@@ -64,6 +72,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({ onUploadStart, disabled 
                     accept=".pdf,.png,.jpg,.jpeg"
                     onChange={handleFileChange}
                     disabled={disabled}
+                    multiple
                 />
                 <UploadCloud
                     size={44}

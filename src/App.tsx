@@ -15,6 +15,7 @@ function App() {
   const [historyRuns, setHistoryRuns] = useState<PipelineRun[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [pendingRunToTrack, setPendingRunToTrack] = useState<{ shipment_id: string; run_id: number; is_cached?: boolean } | null>(null);
 
   // Helper to load run history and aggregate dashboard stats
   const loadHistoryAndStats = async () => {
@@ -110,14 +111,19 @@ function App() {
               activeRun={activeRun}
               setActiveRun={setActiveRun}
               onRunCompleted={handleDataRefresh}
+              pendingRunToTrack={pendingRunToTrack}
+              onClearPendingRun={() => setPendingRunToTrack(null)}
             />
           </div>
         )}
 
         {activeTab === 'supplier' && (
           <div className="flex-1 flex w-full">
-            <SupplierPortal onEmailSent={() => {
+            <SupplierPortal onEmailSent={(runInfo) => {
               setActiveTab('dashboard');
+              if (runInfo) {
+                setPendingRunToTrack(runInfo);
+              }
               loadHistoryAndStats();
             }} />
           </div>

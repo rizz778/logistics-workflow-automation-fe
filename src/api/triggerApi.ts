@@ -2,12 +2,20 @@ import { baseApi } from './baseApi';
 import type { PipelineRun } from '../types/pipeline';
 import { computeFileSha256 } from './uploadApi';
 
+export interface TriggerEmailResponse {
+    success: boolean;
+    message: string;
+    shipment_id: string;
+    run_id: number;
+    is_cached?: boolean;
+}
+
 export async function triggerEmailIncoming(
     sender: string,
     subject: string,
     body: string,
     files: File[]
-): Promise<{ success: boolean; message: string }> {
+): Promise<TriggerEmailResponse> {
     // Precompute SHA-256 fingerprints
     const filesWithHashes = await Promise.all(
         files.map(async f => ({
@@ -31,7 +39,10 @@ export async function triggerEmailIncoming(
     if (presignedRes.is_cached) {
         return {
             success: true,
-            message: `⚡ Fast-Path Cache HIT: Instant verification recorded for ${files.length} document(s) (Shipment: ${presignedRes.shipment_id}).`
+            message: `⚡ Fast-Path Cache HIT: Instant verification recorded for ${files.length} document(s) (Shipment: ${presignedRes.shipment_id}).`,
+            shipment_id: presignedRes.shipment_id,
+            run_id: presignedRes.run_id,
+            is_cached: true
         };
     }
 
@@ -56,7 +67,10 @@ export async function triggerEmailIncoming(
 
     return {
         success: true,
-        message: `${files.length} document(s) submitted to CG Inbox queue (Shipment: ${presignedRes.shipment_id}).`
+        message: `${files.length} document(s) submitted to CG Inbox queue (Shipment: ${presignedRes.shipment_id}).`,
+        shipment_id: presignedRes.shipment_id,
+        run_id: presignedRes.run_id,
+        is_cached: false
     };
 }
 

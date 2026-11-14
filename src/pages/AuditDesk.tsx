@@ -12,9 +12,17 @@ interface AuditDeskProps {
     activeRun: PipelineRun | null;
     setActiveRun: (run: PipelineRun | null) => void;
     onRunCompleted: () => void;
+    pendingRunToTrack?: { shipment_id: string; run_id: number; is_cached?: boolean } | null;
+    onClearPendingRun?: () => void;
 }
 
-export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, onRunCompleted }) => {
+export const AuditDesk: React.FC<AuditDeskProps> = ({
+    activeRun,
+    setActiveRun,
+    onRunCompleted,
+    pendingRunToTrack,
+    onClearPendingRun
+}) => {
     const [step, setStep] = useState<'idle' | 'uploading' | 'extracting' | 'validating' | 'routing' | 'done'>('idle');
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
@@ -62,19 +70,31 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
         onRunCompleted();
     };
 
-    /** Opens a live SSE log stream after Save Edits so the operator sees re-validation progress */
-    const handleSaveEditsWithSSE = (shipmentId: string, runId: number) => {
-        // Close any existing stream
+    /** Unified live execution pipeline tracker for incoming supplier runs, re-validation, or manual upload */
+    const startLiveRunTracking = (
+        shipmentId: string,
+        runId: number,
+        initialMessages?: string[]
+    ) => {
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
         }
 
-        setStep('validating');
-        setLogs(prev => [
-            ...prev,
-            `── Re-validation started ──`,
-            `SSE: Subscribing to live re-validation stream for shipment ${shipmentId}...`
-        ]);
+        setMode('inbox');
+        setStep('extracting');
+        setLogs(
+            initialMessages || [
+                `Supplier Ingestion: Connected to live execution stream for shipment ${shipmentId} (Run #${runId}).`,
+                `SSE: Subscribing to live execution pipeline (/pipeline/runs/${shipmentId}/events)...`
+            ]
+        );
+
+        // Pre-fetch the run so activeRun is non-null immediately and renders PipelineTracker
+        fetchRunStatus(runId)
+            .then(r => {
+                if (r) setActiveRun(r);
+            })
+            .catch(() => {});
 
         const es = createRunEventSource(
             shipmentId,
@@ -82,12 +102,13 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                 const stepName = (event.step || '').toLowerCase();
                 const statusName = (event.status || '').toLowerCase();
 
-                // Ignore initial snapshot events (status='paused') — those are
-                // page-reload state restores, not live worker events.
                 if (statusName === 'paused' || statusName === 'listening') return;
 
-                // Map step → tracker stage
-                if (stepName === 'validate' || stepName === 'validating') {
+                if (stepName === 'download' || stepName === 'uploading') {
+                    setStep('uploading');
+                } else if (stepName === 'extract' || stepName === 'extracting') {
+                    setStep('extracting');
+                } else if (stepName === 'validate' || stepName === 'validating') {
                     setStep('validating');
                 } else if (stepName === 'route' || stepName === 'routing') {
                     setStep('routing');
@@ -96,28 +117,39 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                     statusName === 'approved' || statusName === 'amended' || statusName === 'amendment_required'
                 ) {
                     setStep('done');
+                    setLoading(false);
                     es.close();
                     try {
                         const updated = await fetchRunStatus(runId);
                         setActiveRun(updated);
-                    } catch { /* keep existing activeRun */ }
+                    } catch { /* keep current */ }
                     loadQueues();
                     onRunCompleted();
-                } else if (stepName === 'human_approval' && statusName === 'pending_review') {
-                    // Worker re-validated and still flagged — paused again for next review
+                } else if (
+                    stepName === 'human_approval' ||
+                    stepName === 'human_correction' ||
+                    statusName === 'pending_review' ||
+                    statusName === 'pending_correction'
+                ) {
                     setStep('done');
+                    setLoading(false);
                     es.close();
                     try {
                         const updated = await fetchRunStatus(runId);
                         setActiveRun(updated);
-                    } catch { /* keep existing */ }
+                    } catch { /* keep current */ }
                     loadQueues();
+                    onRunCompleted();
+                } else if (stepName === 'dlq_exhausted' || stepName === 'error') {
+                    setStep('idle');
+                    setLoading(false);
+                    es.close();
                 }
 
                 if (event.message) {
                     setLogs(prev => [...prev, event.message]);
                 }
-                // Surface review attempt count if present
+
                 if (event.data && typeof event.data === 'object') {
                     const d = event.data as any;
                     if (d.human_review_count !== undefined) {
@@ -130,11 +162,41 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                 }
             },
             (err) => {
-                console.debug('SSE re-validation stream closed:', err);
+                console.debug('SSE event stream closed/disconnected:', err);
             }
         );
 
         eventSourceRef.current = es;
+    };
+
+    // Auto-attach live stream if redirected from SupplierPortal with a newly submitted email run
+    useEffect(() => {
+        if (pendingRunToTrack) {
+            const { shipment_id, run_id, is_cached } = pendingRunToTrack;
+            onClearPendingRun?.();
+            if (is_cached) {
+                fetchRunStatus(run_id)
+                    .then(r => {
+                        setActiveRun(r);
+                        setStep('done');
+                        setLogs([
+                            `⚡ Fast-Path Cache HIT: Instant compliance outcome retrieved for shipment ${shipment_id}.`,
+                            `Bypassed S3 upload and multi-agent queue (0 Gemini tokens consumed).`
+                        ]);
+                    })
+                    .catch(() => {});
+            } else {
+                startLiveRunTracking(shipment_id, run_id);
+            }
+        }
+    }, [pendingRunToTrack]);
+
+    /** Opens a live SSE log stream after Save Edits so the operator sees re-validation progress */
+    const handleSaveEditsWithSSE = (shipmentId: string, runId: number) => {
+        startLiveRunTracking(shipmentId, runId, [
+            `── Re-validation started ──`,
+            `SSE: Subscribing to live re-validation stream for shipment ${shipmentId}...`
+        ]);
     };
 
     const handleUploadStart = async (files: File[]) => {
@@ -234,6 +296,23 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
             setStep('idle');
             setLoading(false);
             setLogs(prev => [...prev, `Pipeline Error: ${err.message || 'Audit execution failed.'}`]);
+        }
+    };
+
+    const handleSelectQueueRun = (run: PipelineRun) => {
+        setActiveRun(run);
+        const inFlight = ['processing', 'pending_upload', 'queued', 'extracting', 'validating'].includes(run.status || '');
+        if (inFlight) {
+            const sId = run.shipment_id || String(run.id);
+            startLiveRunTracking(sId, run.id, [
+                `Connected to live execution pipeline for in-flight shipment ${sId} (Run #${run.id})...`
+            ]);
+        } else {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+            setStep('done');
+            setLogs(run.logs || ['Orchestrator: No logs available.']);
         }
     };
 
@@ -360,7 +439,7 @@ export const AuditDesk: React.FC<AuditDeskProps> = ({ activeRun, setActiveRun, o
                                     return (
                                         <div
                                             key={run.id}
-                                            onClick={() => setActiveRun(run)}
+                                            onClick={() => handleSelectQueueRun(run)}
                                             className={`p-3.5 rounded-lg border text-left cursor-pointer transition-all duration-300 flex flex-col gap-2 bg-[#0B0F19]/40 ${
                                                 isSelected
                                                     ? 'border-indigo-500/80 bg-indigo-500/5 shadow-[0_0_10px_rgba(99,102,241,0.05)]'

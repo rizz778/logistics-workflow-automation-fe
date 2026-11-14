@@ -2,8 +2,14 @@ import React, { useState, useRef } from 'react';
 import { Mail, Paperclip, Send, File, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { triggerEmailIncoming } from '../api/triggerApi';
 
+export interface IngestedRunInfo {
+    shipment_id: string;
+    run_id: number;
+    is_cached?: boolean;
+}
+
 interface SupplierPortalProps {
-    onEmailSent: () => void;
+    onEmailSent: (runInfo?: IngestedRunInfo) => void;
 }
 
 export const SupplierPortal: React.FC<SupplierPortalProps> = ({ onEmailSent }) => {
@@ -55,10 +61,14 @@ export const SupplierPortal: React.FC<SupplierPortalProps> = ({ onEmailSent }) =
             setSuccessMsg(res.message || 'Email successfully dispatched to CG Inbox queue.');
 
             
-            // Wait 2.5 seconds to show success before redirecting to the main dashboard
+            // Wait 1.5 seconds to show success before redirecting to the main dashboard
             setTimeout(() => {
-                onEmailSent();
-            }, 2500);
+                onEmailSent({
+                    shipment_id: res.shipment_id,
+                    run_id: res.run_id,
+                    is_cached: res.is_cached
+                });
+            }, 1500);
             
         } catch (err: any) {
             setError(err.message || 'Failed to trigger simulated email. Is backend running?');
